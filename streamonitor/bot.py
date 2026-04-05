@@ -349,7 +349,7 @@ class Bot(Thread):
                     frame_rate = f" {selected_source['frame_rate']}fps"
                 self.logger.info(f"Selected {selected_source['resolution'][0]}x{selected_source['resolution'][1]}{frame_rate} resolution")
             selected_source_url = selected_source['url']
-            return urljoin(url, selected_source_url)
+            return urljoin(url, selected_source_url.split('/')[-1])
         except BaseException as e:
             self.logger.error("Can't get playlist, got some error: " + str(e))
             traceback.print_tb(e.__traceback__)
