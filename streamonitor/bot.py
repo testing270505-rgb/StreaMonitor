@@ -85,6 +85,12 @@ class Bot(Thread):
         self.gender = None
         self.country = None
         self.url = self.getWebsiteURL()
+        
+        # Multiplatform model support
+        self.parent = None  # Reference to parent Bot instance (for child streams)
+        self.children = []  # List of child Bot instances (for parent streams)
+        self.priority = 1  # Priority level: 1 (highest) to N (lowest)
+        self.is_child = False  # Flag to indicate if this is a child stream
 
     def setUsername(self, username):
         self.username = username
@@ -166,6 +172,38 @@ class Bot(Thread):
             if self.quitting or not self.running:
                 return
 
+    def _check_child_streams(self):
+        """
+        Check child streams and return the highest priority live child.
+        Returns (child_bot, status) or (None, Status.OFFLINE)
+        """
+        if not self.children:
+            return None, Status.OFFLINE
+        
+        live_children = []
+        for child in self.children:
+            child_status = child.getStatus()
+            if child_status in [Status.PUBLIC, Status.PRIVATE]:
+                live_children.append((child, child_status))
+        
+        if not live_children:
+            return None, Status.OFFLINE
+        
+        # Sort by priority (lower number = higher priority)
+        live_children.sort(key=lambda x: x[0].priority)
+        return live_children[0]
+
+    def _handle_child_recording_conflict(self, active_child):
+        """
+        Stop recording on all children except the active_child (highest priority live)
+        """
+        for child in self.children:
+            if child != active_child and child.recording:
+                child.log(f"Stopping recording due to higher priority sibling {active_child.username} [{active_child.siteslug}] coming live")
+                if child.stopDownload:
+                    child.stopDownload()
+                child.running = False
+
     def run(self):
         while not self.quitting:
             while not self.running and not self.quitting:
@@ -177,16 +215,36 @@ class Bot(Thread):
             while self.running:
                 try:
                     self.recording = False
+                    
+                    # For parent streams: check children if parent is offline
+                    if self.children and self.sc in [Status.OFFLINE, Status.LONG_OFFLINE]:
+                        active_child, child_status = self._check_child_streams()
+                        if active_child:
+                            self.log(f"Parent offline, checking child stream {active_child.username} [{active_child.siteslug}]")
+                            # Let child handle the recording instead
+                            continue
+                    
+                    # For child streams: defer to parent if parent is recording
+                    if self.is_child and self.parent and self.parent.recording:
+                        if self.recording:
+                            self.log("Stopping recording due to parent stream being live")
+                            if self.stopDownload:
+                                self.stopDownload()
+                            self.running = False
+                        continue
+                    
                     if not self.bulk_update or self.sc == Status.NOTRUNNING:
                         try:
                             self.sc = self.getStatus()
                         except Exception as e:
                             self.logger.exception(e)
                             self.sc = Status.ERROR
+                    
                     # Check if the status has changed and log the update if it's different from the previous status
                     if self.sc != self.previous_status:
                         self.log(self.status())
                         self.previous_status = self.sc
+                    
                     if self.sc == Status.ERROR:
                         self._sleep(self.sleep_on_error)
                     if self.sc == Status.OFFLINE:
@@ -196,6 +254,12 @@ class Bot(Thread):
                     elif self.sc == Status.PUBLIC or self.sc == Status.PRIVATE:
                         offline_time = 0
                         if self.sc == Status.PUBLIC:
+                            # If parent, stop any recording children
+                            if self.children:
+                                active_child, _ = self._check_child_streams()
+                                if active_child and active_child.recording:
+                                    self._handle_child_recording_conflict(None)
+                            
                             if self.cookie_update_interval > 0 and self.cookieUpdater is not None:
                                 def update_cookie():
                                     while self.sc == Status.PUBLIC and not self.quitting and self.running:
@@ -382,6 +446,8 @@ class Bot(Thread):
         instance.running = data.get('running', True)
         instance.country = data.get('country')
         instance.gender = data.get('gender')
+        instance.priority = data.get('priority', 1)
+        instance.is_child = data.get('is_child', False)
         return instance
 
     def export(self):
@@ -391,6 +457,10 @@ class Bot(Thread):
             "running": self.running,
             "country": self.country,
             "gender": self.gender.value if isinstance(self.gender, Enum) else self.gender,
+            "priority": self.priority,
+            "is_child": self.is_child,
+            "parent_username": self.parent.username if self.parent else None,
+            "parent_site": self.parent.site if self.parent else None,
         }
 
     @staticmethod
@@ -445,6 +515,8 @@ class RoomIdBot(Bot):
     def fromConfig(cls, data):
         instance = cls(username=data['username'], room_id=data.get('room_id'))
         instance.running = data.get('running', True)
+        instance.priority = data.get('priority', 1)
+        instance.is_child = data.get('is_child', False)
         return instance
 
     def export(self):
