@@ -144,10 +144,6 @@ class TelegramManager(Manager):
         if message_text.lower() == 'status':
             return self.get_status_local()
         
-        # Status2 command (local handling)
-        if message_text.lower() == 'status2':
-            return self.get_status2_local()
-        
         # Quit command - don't execute via controller
         if message_text.lower() == 'quit':
             return "Warning: Use /quit only from the main application. Cannot quit from Telegram."
@@ -178,49 +174,6 @@ class TelegramManager(Manager):
             status_msg += "*Recording:*\n"
             for streamer in recording:
                 status_msg += f"`{streamer.username}` ({streamer.site})\n"
-        
-        if monitoring:
-            status_msg += "\n*Monitoring:*\n"
-            for streamer in monitoring:
-                status_msg += f"`{streamer.username}` ({streamer.site})\n"
-        
-        total = len(recording) + len(monitoring)
-        status_msg += f"\nTotal Online: {total} (Recording: {len(recording)}, Monitoring: {len(monitoring)})"
-        
-        return status_msg
-
-    def get_status2_local(self):
-        """Get readable status table from local streamers list (filtered - no offline)"""
-        if not self.streamers:
-            return "No streamers configured"
-        
-        recording = []
-        monitoring = []
-        
-        for streamer in self.streamers:
-            if streamer.recording:
-                recording.append(streamer)
-            elif streamer.running:
-                monitoring.append(streamer)
-        
-        if not recording and not monitoring:
-            return "No online models"
-        
-        # Sort by site, then by username
-        all_online = recording + monitoring
-        all_online.sort(key=lambda x: (x.site, x.username))
-        
-        status_msg = "*Status Table:*\n```\n"
-        status_msg += f"{'Username':<25} {'Site':<15} {'Status':<10}\n"
-        status_msg += "-" * 52 + "\n"
-        
-        for streamer in all_online:
-            status = "REC" if streamer.recording else "MON"
-            username = streamer.username[:24]
-            site = streamer.site[:14]
-            status_msg += f"{username:<25} {site:<15} {status:<10}\n"
-        
-        status_msg += "```"
         
         total = len(recording) + len(monitoring)
         status_msg += f"\nTotal Online: {total} (Recording: {len(recording)}, Monitoring: {len(monitoring)})"
@@ -300,11 +253,6 @@ class TelegramManager(Manager):
         if recording_models:
             message += "*Recording:*\n"
             for model in recording_models:
-                message += f"  `{model.username}` ({model.site})\n"
-
-        if online_models:
-            message += "\n*Monitoring:*\n"
-            for model in online_models:
                 message += f"  `{model.username}` ({model.site})\n"
 
         total = len(recording_models) + len(online_models)
