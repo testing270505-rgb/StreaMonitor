@@ -36,9 +36,23 @@ def getVideoFfmpeg(self, url, filename):
     # Handle CMAF with separate audio/video URLs (tuple: (video_url, audio_url))
     if isinstance(url, tuple):
         video_url, audio_url = url
-        cmd.extend(['-i', video_url, '-i', audio_url])
-        # Re-encode audio to AAC for proper sync with video
-        cmd.extend(['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-map', '0:v:0', '-map', '1:a:0'])
+        if audio_url:
+            # The two live playlists can open on adjacent CMAF segments. Keep
+            # their media timestamps and align the audio input to the video
+            # input instead of independently rebasing both inputs to zero.
+            cmd.extend([
+                '-copyts',
+                '-start_at_zero',
+                '-i', video_url,
+                '-isync', '0',
+                '-i', audio_url,
+                '-c:v', 'copy',
+                '-c:a', 'copy',
+                '-map', '0:v:0',
+                '-map', '1:a:0',
+            ])
+        else:
+            cmd.extend(['-i', video_url, '-c:a', 'copy', '-c:v', 'copy'])
     else:
         cmd.extend(['-i', url])
         cmd.extend(['-c:a', 'copy', '-c:v', 'copy'])
