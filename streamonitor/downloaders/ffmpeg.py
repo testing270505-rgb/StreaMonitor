@@ -12,6 +12,7 @@ from parameters import DEBUG, SEGMENT_TIME, CONTAINER, FFMPEG_PATH, FFMPEG_READR
 def getVideoFfmpeg(self, url, filename):
     cmd = [
         FFMPEG_PATH,
+        '-loglevel', 'verbose',
         '-user_agent', self.headers['User-Agent'],
         '-progress', 'pipe:1',
         '-nostats',
@@ -36,30 +37,32 @@ def getVideoFfmpeg(self, url, filename):
         '-m3u8_hold_counters', '20',
     ])
 
-    def add_input(input_url):
-        cmd.extend([
-            '-reconnect', '1',
-            '-reconnect_at_eof', '1',
-            '-reconnect_streamed', '1',
-            '-reconnect_on_network_error', '1',
-            '-reconnect_on_http_error', '4xx,5xx',
-            '-reconnect_delay_max', '10',
-        ])
+    def add_input(input_url, reconnect=True):
+        if reconnect:
+            cmd.extend([
+                '-reconnect', '1',
+                '-reconnect_at_eof', '1',
+                '-reconnect_streamed', '1',
+                '-reconnect_on_network_error', '1',
+                '-reconnect_on_http_error', '4xx,5xx',
+                '-reconnect_delay_max', '10',
+            ])
         if self.proxy_url:
             cmd.extend(['-http_proxy', self.proxy_url])
-        cmd.extend(['-i', input_url])
+        cmd.extend([
+            '-live_start_index', '-1',
+            '-i', input_url,
+        ])
 
     # Handle CMAF with separate audio/video URLs (tuple: (video_url, audio_url))
     if isinstance(url, tuple):
         video_url, audio_url = url
         if audio_url:
-            # The two live playlists can open on adjacent CMAF segments. Keep
-            # their media timestamps and align the audio input to the video
-            # input instead of independently rebasing both inputs to zero.
-            cmd.extend(['-copyts', '-start_at_zero'])
-            add_input(video_url)
-            cmd.extend(['-isync', '0'])
-            add_input(audio_url)
+            # CMAF video/audio playlists must start at the current live edge.
+            # FFmpeg reconnecting expired fragments can otherwise stall both
+            # inputs before the segment muxer creates the output file.
+            add_input(video_url, reconnect=False)
+            add_input(audio_url, reconnect=False)
             cmd.extend([
                 '-c:v', 'copy',
                 '-c:a', 'copy',
