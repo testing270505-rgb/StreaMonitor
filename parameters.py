@@ -13,14 +13,39 @@ TELEGRAM_CHAT_ID = env.int("STRMNTR_TELEGRAM_CHAT_ID", 0)
 TELEGRAM_STATUS_INTERVAL = env.int("STRMNTR_TELEGRAM_STATUS_INTERVAL", 1800)  # 30 minutes
 
 DOWNLOADS_DIR = env.str("STRMNTR_DOWNLOAD_DIR", "downloads")
-MIN_FREE_DISK_PERCENT = env.float("STRMNTR_MIN_FREE_SPACE", 5.0)  # in %
+MIN_FREE_DISK_PERCENT = env.float("STRMNTR_MIN_FREE_SPACE", 1.0)  # in %
 DEBUG = env.bool("STRMNTR_DEBUG", False)
 
 # The camsoda bot ignores this setting in favor of a chrome useragent generated with the fake-useragent library
-HTTP_USER_AGENT = env.str("STRMNTR_USER_AGENT", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0")
+HTTP_USER_AGENT = env.str("STRMNTR_USER_AGENT", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0")
 
 # Specify the full path to the ffmpeg binary. By default, ffmpeg found on PATH is used.
 FFMPEG_PATH = env.str("STRMNTR_FFMPEG_PATH", 'ffmpeg')
+
+# Optional HTTP CONNECT proxies used after a direct request reports an IP
+# rate-limit or a geographic restriction. The selected route stays active for
+# playlist lookup and recording so signed stream URLs use the same public IP.
+RATE_LIMIT_PROXY = env.str("STRMNTR_RATE_LIMIT_PROXY", "http://127.0.0.1:8881")
+GEO_PROXY = env.str("STRMNTR_GEO_PROXY", "http://127.0.0.1:8882")
+RATE_LIMIT_PROXY_NAME = env.str("STRMNTR_RATE_LIMIT_PROXY_NAME", "India proxy")
+GEO_PROXY_NAME = env.str("STRMNTR_GEO_PROXY_NAME", "US proxy")
+
+# FlareSolverr solves Cloudflare browser challenges. Its container shares the
+# media_default network with the two Gluetun HTTP proxies, so it uses their
+# internal names while StreaMonitor uses the host-published proxy ports above.
+FLARESOLVERR_URL = env.str("STRMNTR_FLARESOLVERR_URL", "http://127.0.0.1:8191/v1")
+FLARESOLVERR_TIMEOUT = env.int("STRMNTR_FLARESOLVERR_TIMEOUT", 60)
+FLARESOLVERR_RETRY_INTERVAL = env.int("STRMNTR_FLARESOLVERR_RETRY_INTERVAL", 300)
+FLARESOLVERR_RATE_LIMIT_PROXY = env.str(
+    "STRMNTR_FLARESOLVERR_RATE_LIMIT_PROXY", "http://proton-india:8888")
+FLARESOLVERR_GEO_PROXY = env.str(
+    "STRMNTR_FLARESOLVERR_GEO_PROXY", "http://proton-us:8888")
+FLARESOLVERR_RATE_LIMIT_SESSION = env.str("STRMNTR_FLARESOLVERR_RATE_LIMIT_SESSION", "india")
+FLARESOLVERR_GEO_SESSION = env.str("STRMNTR_FLARESOLVERR_GEO_SESSION", "us")
+FLARESOLVERR_DISABLE_MEDIA = env.bool("STRMNTR_FLARESOLVERR_DISABLE_MEDIA", True)
+
+# Restart a recording when FFmpeg produces no new media progress for this long.
+FFMPEG_STALL_TIMEOUT = env.int("STRMNTR_FFMPEG_STALL_TIMEOUT", 60)
 
 # You can enter a number to select a specific height.
 # Use a huge number here and closest match to get the highest resolution variant
@@ -44,7 +69,7 @@ VR_FORMAT_SUFFIX = env.bool("STRMNTR_VR_FORMAT_SUFFIX", True)
 # Setting it to 0 can result in very fragmented recordings.
 # 1 can result in skipped segments
 # 1.3 should be the sweet spot but use what works
-FFMPEG_READRATE = env.int("STRMNTR_FFMPEG_READRATE", 1.3)
+FFMPEG_READRATE = env.float("STRMNTR_FFMPEG_READRATE", 1.3)
 
 # Specify the segment time in seconds
 # If None, the video will be downloaded as a single file
@@ -64,7 +89,7 @@ SEGMENT_TIME = env.str("STRMNTR_SEGMENT_TIME", 3600)
 
 # Bind address for the web server
 # 0.0.0.0 for remote access from all host
-WEBSERVER_HOST = env.str("STRMNTR_HOST", "127.0.0.1")
+WEBSERVER_HOST = env.str("STRMNTR_HOST", "0.0.0.0")
 WEBSERVER_PORT = env.int("STRMNTR_PORT", 5000)
 
 # Web UI skin
@@ -75,7 +100,7 @@ WEBSERVER_PORT = env.int("STRMNTR_PORT", 5000)
 WEBSERVER_SKIN = env.str("STRMNTR_SKIN", "truck-kun")
 
 # set frequency in seconds of how often the streamer list will update
-WEB_LIST_FREQUENCY = env.int("STRMNTR_LIST_FREQ", 30)
+WEB_LIST_FREQUENCY = env.int("STRMNTR_LIST_FREQ", 60)
 
 # set frequency in seconds of how often the streamer's status will update on the recording page
 WEB_STATUS_FREQUENCY = env.int("STRMNTR_STATUS_FREQ", 5)

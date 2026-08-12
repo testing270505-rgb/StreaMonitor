@@ -8,13 +8,21 @@ import m3u8
 from time import sleep
 from datetime import datetime
 from threading import Thread
+from urllib.parse import urlparse
 
 import requests
 import requests.cookies
 
 from streamonitor.enums import Status, COUNTRIES, Gender, GENDER_DATA
 import streamonitor.log as log
-from parameters import DOWNLOADS_DIR, DEBUG, WANTED_RESOLUTION, WANTED_RESOLUTION_PREFERENCE, CONTAINER, HTTP_USER_AGENT
+from parameters import (
+    DOWNLOADS_DIR, DEBUG, WANTED_RESOLUTION, WANTED_RESOLUTION_PREFERENCE,
+    CONTAINER, HTTP_USER_AGENT, RATE_LIMIT_PROXY, GEO_PROXY,
+    RATE_LIMIT_PROXY_NAME, GEO_PROXY_NAME, FLARESOLVERR_RATE_LIMIT_PROXY,
+    FLARESOLVERR_GEO_PROXY, FLARESOLVERR_RATE_LIMIT_SESSION,
+    FLARESOLVERR_GEO_SESSION,
+)
+from streamonitor.cloudflare_session import CloudflareSession
 from streamonitor.downloaders.ffmpeg import getVideoFfmpeg
 from streamonitor.models import VideoData
 
@@ -64,8 +72,11 @@ class Bot(Thread):
         self.username = username
         self.logger = self.getLogger()
 
-        self.session = requests.Session()
+        self.headers = dict(self.headers)
+        self.session = CloudflareSession(self.logger, self._cloudflare_solved)
         self.session.headers.update(self.headers)
+        self.proxy_url = None
+        self.proxy_name = "direct"
         self.cookies = None
         self.cookieUpdater = None
         self.cookie_update_interval = 0
@@ -99,6 +110,41 @@ class Bot(Thread):
 
     def restart(self):
         self.running = True
+
+    @property
+    def route_description(self):
+        if not self.proxy_url:
+            return "direct"
+        parsed = urlparse(self.proxy_url)
+        address = parsed.hostname or "unknown"
+        if parsed.port:
+            address += f":{parsed.port}"
+        return f"{self.proxy_name} [{address}]"
+
+    def _cloudflare_solved(self, user_agent):
+        if user_agent:
+            self.headers["User-Agent"] = user_agent
+        self.cookies = self.session.cookies
+
+    def _set_proxy(self, name, url, flaresolverr_proxy_url, flaresolverr_session):
+        if not url or self.proxy_url == url:
+            return False
+        self.session.set_route(name, url, flaresolverr_proxy_url, flaresolverr_session)
+        self.proxy_url = url
+        self.proxy_name = name
+        self.log(f"Switching requests to {self.route_description}")
+        return True
+
+    def _set_proxy_for_status(self, status):
+        if status == Status.RATELIMIT:
+            return self._set_proxy(
+                RATE_LIMIT_PROXY_NAME, RATE_LIMIT_PROXY,
+                FLARESOLVERR_RATE_LIMIT_PROXY, FLARESOLVERR_RATE_LIMIT_SESSION)
+        if status == Status.RESTRICTED:
+            return self._set_proxy(
+                GEO_PROXY_NAME, GEO_PROXY, FLARESOLVERR_GEO_PROXY,
+                FLARESOLVERR_GEO_SESSION)
+        return False
 
     def stop(self, a, b, thread_too=False):
         if self.running:
@@ -183,6 +229,12 @@ class Bot(Thread):
                         except Exception as e:
                             self.logger.exception(e)
                             self.sc = Status.ERROR
+                    if self._set_proxy_for_status(self.sc):
+                        try:
+                            self.sc = self.getStatus()
+                        except Exception as e:
+                            self.logger.exception(e)
+                            self.sc = Status.ERROR
                     # Check if the status has changed and log the update if it's different from the previous status
                     if self.sc != self.previous_status:
                         self.log(self.status())
@@ -219,7 +271,7 @@ class Bot(Thread):
                                 self.logger.error(self.status())
                                 self._sleep(self.sleep_on_error)
                                 continue
-                            self.log('Started downloading show')
+                            self.log(f'Started downloading show via {self.route_description}')
                             self.recording = True
                             file = self.genOutFilename()
                             try:
@@ -227,13 +279,13 @@ class Bot(Thread):
                             except Exception as e:
                                 self.logger.exception(e)
                                 ret = False
+                            self.recording = False
                             if not ret:
                                 self.log('Recording ended with error')
                                 self.sc = Status.ERROR
                                 self.log(self.status())
                                 self._sleep(self.sleep_on_error)
                                 continue
-                            self.recording = False
                             self.log('Recording ended')
                             try:
                                 self.cache_file_list()
@@ -254,7 +306,7 @@ class Bot(Thread):
                     break
                 elif self.bulk_update:
                     self._sleep(1)
-                elif self.ratelimit:
+                elif self.sc == Status.RATELIMIT:
                     self._sleep(self.sleep_on_ratelimit)
                 elif offline_time > self.long_offline_timeout:
                     self._sleep(self.sleep_on_long_offline)

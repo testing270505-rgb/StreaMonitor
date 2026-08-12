@@ -15,7 +15,7 @@ class StripChatVR(StripChat):
     }
 
     def __init__(self, username, room_id=None):
-        super().__init__(username, room_id)
+        super().__init__(username)
         self.stopDownloadFlag = False
         self.vr = True
 
