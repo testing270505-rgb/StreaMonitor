@@ -99,6 +99,34 @@ Simply start it in the folder with `docker-compose up`.
 
 You can set some parameters in the [parameters.py](parameters.py).
 
+### Proxy fallback and stalled recordings
+
+Status and stream requests start with the direct connection. A rate-limit
+switches that streamer's session to the rate-limit proxy, while a geographic
+restriction switches it to the geo proxy. The selected route remains active
+for playlist and FFmpeg requests and is included in the recording log.
+
+```dotenv
+STRMNTR_RATE_LIMIT_PROXY=http://127.0.0.1:8881
+STRMNTR_RATE_LIMIT_PROXY_NAME=India proxy
+STRMNTR_GEO_PROXY=http://127.0.0.1:8882
+STRMNTR_GEO_PROXY_NAME=US proxy
+STRMNTR_FLARESOLVERR_URL=http://127.0.0.1:8191/v1
+STRMNTR_FLARESOLVERR_RATE_LIMIT_PROXY=http://proton-india:8888
+STRMNTR_FLARESOLVERR_GEO_PROXY=http://proton-us:8888
+STRMNTR_FFMPEG_STALL_TIMEOUT=60
+```
+
+When a response contains Cloudflare challenge markers, StreaMonitor asks
+FlareSolverr to solve it, imports the returned cookies and browser user agent,
+and continues through the same direct/VPN route. FlareSolverr and the Gluetun
+containers must share a container network for the internal proxy addresses
+above to resolve. FlareSolverr is not used for media downloads.
+
+When StreaMonitor itself runs in a container, `127.0.0.1` refers to that
+container. Use the Podman host address instead, for example
+`http://host.containers.internal:8881` and `:8882`.
+
 You also have to add decryption keys yourself for StripChat in the `stripchat_mouflon_keys.json` file.
 
 ## Disclaimer

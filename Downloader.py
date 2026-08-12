@@ -9,6 +9,8 @@ from streamonitor.managers.outofspace_detector import OOSDetector
 from streamonitor.clean_exit import CleanExit
 import streamonitor.sites  # must have
 from streamonitor.managers.telegram_manager import TelegramManager
+from streamonitor.cloudflare_session import create_flaresolverr_sessions
+from streamonitor.log import Logger
 
         
 def is_docker():
@@ -20,6 +22,9 @@ def is_docker():
 
 
 def main():
+    startup_logger = Logger("startup").get_logger()
+    create_flaresolverr_sessions(startup_logger)
+
     if not OOSDetector.disk_space_good():
         print(OOSDetector.under_threshold_message)
         sys.exit(1)
