@@ -214,6 +214,7 @@ class TelegramManager(Manager):
                         f"*[REC] Recording Started*\n"
                         f"*Model:* `{streamer.username}`\n"
                         f"*Site:* `{streamer.site}`\n"
+                        f"*Route:* `{getattr(streamer, 'route_description', 'direct')}`\n"
                         f"*Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     self.send_message(message)
@@ -222,6 +223,7 @@ class TelegramManager(Manager):
                         f"*[STOP] Recording Stopped*\n"
                         f"*Model:* `{streamer.username}`\n"
                         f"*Site:* `{streamer.site}`\n"
+                        f"*Route:* `{getattr(streamer, 'route_description', 'direct')}`\n"
                         f"*Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     self.send_message(message)
